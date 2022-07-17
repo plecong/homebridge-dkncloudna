@@ -29,10 +29,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git://github.com/homebridge/homebridge-examples.git"
+    "url": "git://github.com/plecong/homebridge-dkncloudna.git"
   },
   "bugs": {
-    "url": "http://github.com/homebridge/homebridge-examples/issues"
+    "url": "http://github.com/plecong/homebridge-dkncloudna/issues"
   },
   "devDependencies": {
     "@tsconfig/node10": "^1.0.9",
