@@ -10,12 +10,10 @@ import { DeviceAccessory } from "./accessory";
 import { Api } from "./api";
 import type { DCNAConfig } from "./config";
 import { hap } from "./hap";
-
-export const PLUGIN_NAME = "homebridge-dkncloudna";
-export const PLATFORM_NAME = "dkncloudna";
+import { PLATFORM_NAME, PLUGIN_NAME } from "./settings";
 
 export class DknCloudNaPlatform implements DynamicPlatformPlugin {
-  private readonly config: (PlatformConfig & DCNAConfig) | undefined;
+  private readonly config: PlatformConfig & DCNAConfig;
   private readonly accessories: Record<string, PlatformAccessory> = {};
   private readonly cloudApi!: Api;
 
@@ -85,7 +83,7 @@ export class DknCloudNaPlatform implements DynamicPlatformPlugin {
         createdAccessories.push(accessory);
       }
 
-      new DeviceAccessory(device, accessory, this.log, this.config!);
+      new DeviceAccessory(device, accessory, this.log, this.config);
       this.accessories[uuid] = accessory;
       activeAccessoryIds.push(uuid);
     }

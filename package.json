@@ -4,15 +4,18 @@
   "name": "@plecong/homebridge-dkncloudna",
   "version": "0.1.0",
   "description": "Homebridge plugin for DKN Cloud NA",
-  "main": "dist/index.js",
   "author": "Phuong LeCong <plecong@gmail.com>",
   "license": "Apache-2.0",
-  "scripts": {
-    "clean": "rimraf ./dist",
-    "build": "rimraf ./dist && tsc",
-    "prepublishOnly": "npm run build",
-    "postpublish": "npm run clean",
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/plecong/homebridge-dkncloudna.git"
+  },
+  "bugs": {
+    "url": "http://github.com/plecong/homebridge-dkncloudna/issues"
+  },
+  "engines": {
+    "node": ">=14.18.1",
+    "homebridge": ">=1.3.5"
   },
   "keywords": [
     "homebridge-plugin",
@@ -20,19 +23,23 @@
     "airzone",
     "DKN"
   ],
-  "engines": {
-    "homebridge": ">=1.0.0"
-  },
+  "main": "dist/index.js",
   "files": [
     "LICENSE",
     "dist"
   ],
-  "repository": {
-    "type": "git",
-    "url": "git://github.com/plecong/homebridge-dkncloudna.git"
+  "scripts": {
+    "lint": "eslint src/**.ts --max-warnings=0",
+    "watch": "npm run build && npm link && nodemon",
+    "clean": "rimraf ./dist",
+    "build": "rimraf ./dist && tsc",
+    "prepublishOnly": "npm run build",
+    "postpublish": "npm run clean",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "bugs": {
-    "url": "http://github.com/plecong/homebridge-dkncloudna/issues"
+  "dependencies": {
+    "node-fetch": "^2.6.7",
+    "socket.io-client": "^2.5.0"
   },
   "devDependencies": {
     "@tsconfig/node10": "^1.0.9",
@@ -45,9 +52,5 @@
     "homebridge": "^1.5.0",
     "rimraf": "^3.0.2",
     "typescript": "^4.7.4"
-  },
-  "dependencies": {
-    "node-fetch": "^2.6.7",
-    "socket.io-client": "^2.5.0"
   }
 }
