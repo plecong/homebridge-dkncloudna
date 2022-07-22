@@ -51,8 +51,12 @@ export class Api extends EventEmitter {
 
   private manager: Manager | undefined;
   private installations: InstallationInfo[] = [];
-  private readonly sockets: Record<string, Socket> = {};
-  private devices: Record<string, DeviceTwin> = {};
+  private sockets: Record<string, Socket> = {};
+  private devices: Map<string, DeviceTwin> = new Map();
+
+  private reconnecting = false;
+  private reconnectionAttempts = 5;
+  private backoff = new Backoff({ min: 1000, max: 5000, jitter: 0.5 });
 
   constructor(
     config: DCNAConfig,
@@ -105,42 +109,34 @@ export class Api extends EventEmitter {
     }
 
     await this.refreshInstallations();
+
+    // successfully connected
     this.reconnecting = false;
+    this.backoff.reset();
   }
 
   private async refreshInstallations(): Promise<void> {
     const result = await this.client.getInstallations();
+
     if (result.ok) {
       this.installations = result.value;
-      this.clearDevices();
-
-      for (const install of this.installations) {
-        for (const device of install.devices) {
-          this.devices[device.mac] = new DeviceTwin(
-            install._id,
+      this.devices = new Map(
+        this.installations.flatMap((install) =>
+          install.devices.map((device) => [
             device.mac,
-            this,
-            device
-          );
-        }
-      }
+            new DeviceTwin(install._id, device.mac, this, device),
+          ])
+        )
+      );
 
-      this.emit("devices", Object.values(this.devices));
       this.connectSockets();
     } else {
       // remove all devices
       this.installations = [];
-      this.clearDevices();
-      this.emit("devices", []);
+      this.devices.clear();
     }
-  }
 
-  private clearDevices() {
-    // clean-up devices
-    Object.values(this.devices).forEach((device) =>
-      device.removeAllListeners()
-    );
-    this.devices = {};
+    this.emit("devices", this.devices.values());
   }
 
   private connectSockets(): void {
@@ -148,7 +144,6 @@ export class Api extends EventEmitter {
       transports: ["polling"], // "websocket"],
       path: this.config.apiBase + this.config.socketPath,
       extraHeaders: { Authorization: `Bearer ${this.token}` },
-      autoConnect: false,
     });
 
     this.manager.on("ping", () => {
@@ -234,9 +229,23 @@ export class Api extends EventEmitter {
     }
   }
 
-  private reconnecting = false;
-  private reconnectionAttempts = 5;
-  private backoff = new Backoff({ min: 1000, max: 5000, jitter: 0.5 });
+  private disconnect() {
+    this.log.debug("Disconnecting");
+
+    if (this.sockets) {
+      Object.values(this.sockets).forEach((socket) => {
+        socket.removeAllListeners();
+        socket.close();
+      });
+      this.sockets = {};
+    }
+
+    if (this.manager) {
+      this.manager.removeAllListeners();
+      this.manager.close();
+      this.manager = undefined;
+    }
+  }
 
   private reconnect() {
     if (this.reconnecting) {
@@ -258,7 +267,7 @@ export class Api extends EventEmitter {
       `\x1b[32m[Device:${message.mac}]\x1b[0m \x1b[31m⬇\x1b[0m `,
       message.data
     );
-    const device = this.devices[message.mac];
+    const device = this.devices.get(message.mac);
     if (device) {
       device.patch(message.data);
     }
@@ -290,23 +299,6 @@ export class Api extends EventEmitter {
       machineEvent
     );
     socket.emit("create-machine-event", machineEvent);
-  }
-
-  private disconnect() {
-    this.log.debug("Disconnecting");
-
-    if (this.sockets) {
-      Object.values(this.sockets).forEach((socket) => {
-        socket.removeAllListeners();
-        socket.close();
-      });
-    }
-
-    if (this.manager) {
-      this.manager.removeAllListeners();
-      this.manager.close();
-      this.manager = undefined;
-    }
   }
 
   private async saveTokens(tokens: {

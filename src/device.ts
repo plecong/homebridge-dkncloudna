@@ -71,14 +71,19 @@ export class DeviceTwin extends EventEmitter {
     return this.device.real_mode;
   }
 
-  get workTemp(): number {
-    return (
-      this.device.work_temp ||
-      (this.device.units === TemperatureUnits.CELSIUS ? 0 : 32)
-    );
+  get currentTemperature(): number {
+    let value = this.device.work_temp;
+
+    if (value === undefined) {
+      value = this.device.units === TemperatureUnits.CELSIUS ? 0 : 32;
+    }
+
+    return this.device.units === TemperatureUnits.FAHRENHEIT
+      ? toCelsius(value)
+      : value;
   }
 
-  get targetTemperature(): number {
+  get setpointTemperature(): number {
     switch (this.mode) {
       case DeviceMode.AUTO:
         return this.device.setpoint_air_auto;
@@ -91,7 +96,19 @@ export class DeviceTwin extends EventEmitter {
     }
   }
 
-  set targetTemperature(value: number) {
+  get targetTemperature(): number {
+    const value = this.setpointTemperature;
+    return this.device.units === TemperatureUnits.FAHRENHEIT
+      ? toCelsius(value)
+      : value;
+  }
+
+  set targetTemperature(celsiusValue: number) {
+    const value =
+      this.device.units === TemperatureUnits.FAHRENHEIT
+        ? toFahrenheit(celsiusValue)
+        : celsiusValue;
+
     switch (this.mode) {
       case DeviceMode.AUTO:
         this.sendEvent("setpoint_air_auto", value);
@@ -115,4 +132,16 @@ export class DeviceTwin extends EventEmitter {
   private sendEvent(property: string, value: unknown): void {
     this.api.sendMachineEvent(this.installation, this.mac, property, value);
   }
+}
+
+function toFahrenheit(temperature: number): number {
+  // Convert from Celsius to Fahrenheit
+  const fahrenheit = (temperature * 9) / 5 + 32;
+  return Math.round(fahrenheit);
+}
+
+function toCelsius(temperature: number): number {
+  // Convert from Fahrenheit to Celsius
+  const celsius = ((temperature - 32) * 5) / 9;
+  return Math.round(celsius * 10) / 10;
 }
