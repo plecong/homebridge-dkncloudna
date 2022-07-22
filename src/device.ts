@@ -20,12 +20,8 @@ export class DeviceTwin {
     );
   }
 
-  addListener(f: (...args: any[]) => any) {
+  addListener(f: (a: string) => void) {
     this.emitter.addListener("patch", f);
-  }
-
-  removeListener(f: (...args: any[]) => any) {
-    this.emitter.removeListener("patch", f);
   }
 
   private get device() {

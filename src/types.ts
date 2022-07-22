@@ -74,7 +74,6 @@ export type InstallationInfo = {
   devices: Array<DeviceInfo>;
   timezoneId: string;
   units: number;
-  schedules: Array<any>;
   added_at: string;
   type: string;
 };

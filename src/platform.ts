@@ -83,7 +83,7 @@ export class DknCloudNaPlatform implements DynamicPlatformPlugin {
         createdAccessories.push(accessory);
       }
 
-      new DeviceAccessory(device, accessory, this.log, this.config);
+      new DeviceAccessory(device, accessory, this.log);
       this.accessories[uuid] = accessory;
       activeAccessoryIds.push(uuid);
     }
@@ -100,7 +100,8 @@ export class DknCloudNaPlatform implements DynamicPlatformPlugin {
     // unregister stale accessories
     const staleAccessories = cachedAccessoryIds
       .filter((cachedId) => !activeAccessoryIds.includes(cachedId))
-      .map((id) => this.accessories[id]!);
+      .map((id) => this.accessories[id])
+      .filter(this.isDefined);
 
     staleAccessories.forEach((staleAccessory) => {
       this.log.info(
@@ -115,5 +116,9 @@ export class DknCloudNaPlatform implements DynamicPlatformPlugin {
         staleAccessories
       );
     }
+  }
+
+  isDefined<T>(argument: T | undefined): argument is T {
+    return argument !== undefined;
   }
 }

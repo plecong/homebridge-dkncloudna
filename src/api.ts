@@ -40,7 +40,7 @@ export class Api {
       // TODO: check the "loggedIn" endpoint with token before logging in
     }
 
-    const login: DknLogin = await this._request("POST", this.config.loginPath, {
+    const login = await this._request<DknLogin>("POST", this.config.loginPath, {
       email,
       password,
     });
@@ -51,7 +51,7 @@ export class Api {
     this.refreshToken = login.refreshToken;
 
     // retrieve the installations
-    const installations: InstallationInfo[] = await this._request(
+    const installations = await this._request<InstallationInfo[]>(
       "GET",
       this.config.installationsPath
     );
@@ -81,11 +81,11 @@ export class Api {
     );
   }
 
-  private async _request(
+  private async _request<T>(
     method: string,
     path: string,
     body?: object
-  ): Promise<any> {
+  ): Promise<T> {
     const url = new URL(`${this.config.baseUrl}${this.config.apiBase}${path}`);
     const headers: RequestInit["headers"] = {
       Accept: "application/json",
@@ -93,6 +93,7 @@ export class Api {
       "User-Agent":
         "Mozilla/5.0 (iPhone; CPU iPhone OS 14_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile",
     };
+    let data;
 
     if (this.token) {
       headers["Authorization"] = `Bearer ${this.token}`;
@@ -128,7 +129,7 @@ export class Api {
       }
     } else {
       // TODO refresh the token and retry
-      const data = await response.json();
+      data = await response.json();
       this.log.error(
         `Error calling to AirzoneCloud. Status: ${response.status} ${response.statusText} ` +
           `${
@@ -136,9 +137,10 @@ export class Api {
           }`
       );
     }
+    return data;
   }
 
-  private _obfuscate(key: any, value: any): string {
+  private _obfuscate(key: string, value: string): string {
     if (key === "password" && typeof value === "string") {
       return value.replace(/./g, "*");
     }

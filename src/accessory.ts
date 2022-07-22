@@ -2,7 +2,6 @@ import type {
   CharacteristicValue,
   Logger,
   PlatformAccessory,
-  PlatformConfig,
   Service,
 } from "homebridge";
 import type { DeviceTwin } from "./device";
@@ -15,15 +14,14 @@ export class DeviceAccessory {
   constructor(
     private device: DeviceTwin,
     accessory: PlatformAccessory,
-    private log: Logger,
-    _config: PlatformConfig
+    private log: Logger
   ) {
     const { Characteristic, Service } = hap;
 
     accessory
-      .getService(Service.AccessoryInformation)!
-      .setCharacteristic(Characteristic.Manufacturer, "Daikin")
-      .setCharacteristic(Characteristic.SerialNumber, this.device.mac);
+      .getService(Service.AccessoryInformation)
+      ?.setCharacteristic(Characteristic.Manufacturer, "Daikin")
+      ?.setCharacteristic(Characteristic.SerialNumber, this.device.mac);
 
     this.service =
       accessory.getService(Service.Thermostat) ||
@@ -56,7 +54,7 @@ export class DeviceAccessory {
     this.device.addListener(this.updateCharacteristics.bind(this));
   }
 
-  updateCharacteristics(property: string, _value: any) {
+  updateCharacteristics(property: string) {
     const { Characteristic } = hap;
     switch (property) {
       case "work_temp":
@@ -197,7 +195,7 @@ export class DeviceAccessory {
     }
   }
 
-  async setTemperatureDisplayUnits(_: CharacteristicValue) {
+  async setTemperatureDisplayUnits() {
     // NO-OP: Dkn Cloud NA sets the units at the installation level
   }
 
