@@ -11,11 +11,13 @@ import { Api } from "./api";
 import type { DCNAConfig } from "./config";
 import { hap } from "./hap";
 import { PLATFORM_NAME, PLUGIN_NAME } from "./settings";
+import type { DeviceTwin } from "./device";
 
 export class DknCloudNaPlatform implements DynamicPlatformPlugin {
   private readonly config: PlatformConfig & DCNAConfig;
   private readonly accessories: Record<string, PlatformAccessory> = {};
-  private readonly cloudApi!: Api;
+  private readonly devices: Record<string, DeviceAccessory> = {};
+  private readonly cloud: Api;
 
   constructor(
     private readonly log: Logging,
@@ -28,7 +30,8 @@ export class DknCloudNaPlatform implements DynamicPlatformPlugin {
     }
 
     this.config = config as PlatformConfig & DCNAConfig;
-    this.cloudApi = new Api(this.config, log);
+    this.cloud = new Api(this.config, api, log);
+    this.cloud.on("devices", this.registerDevices.bind(this));
 
     /*
      * When this event is fired, homebridge restored all cached accessories from disk and did call their respective
@@ -38,7 +41,7 @@ export class DknCloudNaPlatform implements DynamicPlatformPlugin {
      */
     api.on(APIEvent.DID_FINISH_LAUNCHING, () => {
       log.debug("didFinishLaunching");
-      this.connectToCloud().catch((e) => {
+      this.cloud.connect().catch((e) => {
         this.log.error("Error connecting to API");
         this.log.error(e);
       });
@@ -57,40 +60,41 @@ export class DknCloudNaPlatform implements DynamicPlatformPlugin {
     this.accessories[accessory.UUID] = accessory;
   }
 
-  async connectToCloud(): Promise<void> {
-    const { api } = this;
+  registerDevices(devices: DeviceTwin[]): void {
     const cachedAccessoryIds = Object.keys(this.accessories);
     const activeAccessoryIds: string[] = [];
     const createdAccessories: PlatformAccessory[] = [];
 
-    await this.cloudApi.connect();
-
-    for (const device of this.cloudApi.getDevices()) {
-      let accessory: PlatformAccessory;
-
-      const uuid = hap.uuid.generate(device.mac);
+    for (const device of devices) {
+      const uuid = hap.uuid.generate(device.key);
       const existingAccessory = this.accessories[uuid];
 
-      // create a new one
+      let accessory: PlatformAccessory;
       if (existingAccessory) {
         accessory = existingAccessory;
       } else {
-        accessory = new api.platformAccessory(
+        this.log.info(`Creating new accessory ${uuid} ${device.name}`);
+        accessory = new this.api.platformAccessory(
           device.name,
           uuid,
           hap.Categories.AIR_CONDITIONER
         );
+        this.accessories[uuid] = accessory;
         createdAccessories.push(accessory);
       }
 
-      new DeviceAccessory(device, accessory, this.log, this.config);
-      this.accessories[uuid] = accessory;
+      const existingDevice = this.devices[uuid];
+      if (existingDevice) {
+        existingDevice.updateDevice(device);
+      } else {
+        this.devices[uuid] = new DeviceAccessory(device, accessory, this.log);
+      }
       activeAccessoryIds.push(uuid);
     }
 
     // register created accesories
     if (createdAccessories.length) {
-      api.registerPlatformAccessories(
+      this.api.registerPlatformAccessories(
         PLUGIN_NAME,
         PLATFORM_NAME,
         createdAccessories
@@ -100,12 +104,16 @@ export class DknCloudNaPlatform implements DynamicPlatformPlugin {
     // unregister stale accessories
     const staleAccessories = cachedAccessoryIds
       .filter((cachedId) => !activeAccessoryIds.includes(cachedId))
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       .map((id) => this.accessories[id]!);
 
     staleAccessories.forEach((staleAccessory) => {
       this.log.info(
         `Removing stale cached accessory ${staleAccessory.UUID} ${staleAccessory.displayName}`
       );
+      if (this.devices[staleAccessory.UUID]) {
+        delete this.devices[staleAccessory.UUID];
+      }
     });
 
     if (staleAccessories.length) {

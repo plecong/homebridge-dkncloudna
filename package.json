@@ -38,11 +38,13 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "backo2": "^1.0.2",
     "node-fetch": "^2.6.7",
     "socket.io-client": "^2.5.0"
   },
   "devDependencies": {
     "@tsconfig/node10": "^1.0.9",
+    "@types/backo2": "^1.0.1",
     "@types/node": "10.17.19",
     "@types/node-fetch": "^2.6.2",
     "@typescript-eslint/eslint-plugin": "^5.30.6",

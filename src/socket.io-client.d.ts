@@ -21,7 +21,7 @@ declare module "socket.io-client" {
   }
   export = lookup;
 
-  class Manager {
+  class Manager extends EventEmitter {
     /**
      * `Manager` constructor.
      *
