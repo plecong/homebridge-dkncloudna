@@ -1,8 +1,7 @@
 import type {
   CharacteristicValue,
-  Logger,
+  Logging,
   PlatformAccessory,
-  PlatformConfig,
   Service,
 } from "homebridge";
 import type { DeviceTwin } from "./device";
@@ -15,15 +14,16 @@ export class DeviceAccessory {
   constructor(
     private device: DeviceTwin,
     accessory: PlatformAccessory,
-    private log: Logger,
-    _config: PlatformConfig
+    private log: Logging
   ) {
     const { Characteristic, Service } = hap;
 
-    accessory
-      .getService(Service.AccessoryInformation)!
-      .setCharacteristic(Characteristic.Manufacturer, "Daikin")
-      .setCharacteristic(Characteristic.SerialNumber, this.device.mac);
+    const accessoryInfo = accessory.getService(Service.AccessoryInformation);
+    if (accessoryInfo) {
+      accessoryInfo
+        .setCharacteristic(Characteristic.Manufacturer, "Daikin")
+        .setCharacteristic(Characteristic.SerialNumber, this.device.mac);
+    }
 
     this.service =
       accessory.getService(Service.Thermostat) ||
@@ -53,16 +53,24 @@ export class DeviceAccessory {
       .getCharacteristic(Characteristic.TemperatureDisplayUnits)
       .onGet(this.getTemperatureDisplayUnits.bind(this));
 
-    this.device.addListener(this.updateCharacteristics.bind(this));
+    this.device.addListener("patch", this.updateCharacteristics.bind(this));
   }
 
-  updateCharacteristics(property: string, _value: any) {
+  updateDevice(device: DeviceTwin): void {
+    if (this.device) {
+      this.device.removeAllListeners();
+    }
+    this.device = device;
+    this.device.addListener("patch", this.updateCharacteristics.bind(this));
+  }
+
+  updateCharacteristics(property: string) {
     const { Characteristic } = hap;
     switch (property) {
       case "work_temp":
         this.service.updateCharacteristic(
           Characteristic.CurrentTemperature,
-          this.convertGetTemp(this.device.workTemp)
+          this.device.currentTemperature
         );
         break;
       case "setpoint_air_auto":
@@ -70,7 +78,7 @@ export class DeviceAccessory {
       case "setpoint_air_heat":
         this.service.updateCharacteristic(
           Characteristic.TargetTemperature,
-          this.convertGetTemp(this.device.targetTemperature)
+          this.device.targetTemperature
         );
         break;
       case "real_mode":
@@ -98,7 +106,7 @@ export class DeviceAccessory {
           );
           this.service.updateCharacteristic(
             Characteristic.TargetTemperature,
-            this.convertGetTemp(this.device.targetTemperature)
+            this.device.currentTemperature
           );
         }
 
@@ -107,26 +115,25 @@ export class DeviceAccessory {
   }
 
   async getCurrentHeatingCoolingState(): Promise<CharacteristicValue> {
-    return this.device.power === false
-      ? hap.Characteristic.CurrentHeatingCoolingState.OFF
-      : this.device.realMode === DeviceMode.COOL
+    if (!this.device.power) {
+      return hap.Characteristic.CurrentHeatingCoolingState.OFF;
+    }
+
+    return this.device.realMode === DeviceMode.COOL
       ? hap.Characteristic.CurrentHeatingCoolingState.COOL
       : hap.Characteristic.CurrentHeatingCoolingState.HEAT;
   }
 
   async getTargetHeatingCoolingState(): Promise<CharacteristicValue> {
-    const {
-      Characteristic: { TargetHeatingCoolingState },
-    } = hap;
-
     if (!this.device.power) {
-      return TargetHeatingCoolingState.OFF;
+      return hap.Characteristic.TargetHeatingCoolingState.OFF;
     }
 
     return toTargetHeatingCoolingState(this.device.mode);
   }
 
   async setTargetHeatingCoolingState(value: CharacteristicValue) {
+    this.log.debug("Setting TargetHeatingCoolingState", value);
     const {
       Characteristic: { TargetTemperature, TargetHeatingCoolingState },
     } = hap;
@@ -134,54 +141,27 @@ export class DeviceAccessory {
     if (value === TargetHeatingCoolingState.OFF) {
       this.device.power = false;
       return;
-    } else {
-      this.device.power = true;
     }
 
-    const target = (function (t) {
-      switch (t) {
-        case TargetHeatingCoolingState.AUTO:
-          return DeviceMode.AUTO;
-        case TargetHeatingCoolingState.HEAT:
-          return DeviceMode.HEAT;
-        case TargetHeatingCoolingState.COOL:
-          return DeviceMode.COOL;
-      }
-
-      return DeviceMode.AUTO;
-    })(value);
-
-    if (target) {
-      this.device.mode = target;
-      this.service.updateCharacteristic(
-        TargetTemperature,
-        this.convertGetTemp(this.device.targetTemperature)
-      );
-    }
+    this.device.power = true;
+    this.device.mode = toDeviceMode(value);
+    this.service.updateCharacteristic(
+      TargetTemperature,
+      this.device.targetTemperature
+    );
   }
 
   async getCurrentTemperature(): Promise<number> {
-    const value = this.convertGetTemp(this.device.workTemp);
-    this.log.debug(
-      `${this.device.name}:getCurrentTemperature`,
-      this.device.workTemp,
-      value
-    );
-    return value;
+    return this.device.currentTemperature;
   }
 
   async getTargetTemperature(): Promise<number> {
-    const value = this.convertGetTemp(this.device.targetTemperature);
-    this.log.debug(
-      `${this.device.name}:getTargetTemperature`,
-      this.device.targetTemperature,
-      value
-    );
-    return value;
+    return this.device.targetTemperature;
   }
 
   async setTargetTemperature(value: CharacteristicValue) {
-    this.device.targetTemperature = this.convertSetTemp(value as number);
+    this.log.debug("Setting TargetTemperature", value);
+    this.device.targetTemperature = value as number;
   }
 
   async getTemperatureDisplayUnits(): Promise<CharacteristicValue> {
@@ -196,38 +176,22 @@ export class DeviceAccessory {
         return TemperatureDisplayUnits.FAHRENHEIT;
     }
   }
-
-  async setTemperatureDisplayUnits(_: CharacteristicValue) {
-    // NO-OP: Dkn Cloud NA sets the units at the installation level
-  }
-
-  private convertSetTemp(celsiusValue: number) {
-    if (this.device.temperatureUnits === TemperatureUnits.FAHRENHEIT) {
-      return toFahrenheit(celsiusValue);
-    }
-
-    return celsiusValue;
-  }
-
-  private convertGetTemp(value: number) {
-    if (this.device.temperatureUnits === TemperatureUnits.FAHRENHEIT) {
-      return toCelsius(value);
-    }
-
-    return value;
-  }
 }
 
-function toFahrenheit(temperature: number): number {
-  // Convert from Celsius to Fahrenheit
-  const fahrenheit = (temperature * 9) / 5 + 32;
-  return Math.round(fahrenheit);
-}
+function toDeviceMode(value: CharacteristicValue): DeviceMode {
+  const {
+    Characteristic: { TargetHeatingCoolingState },
+  } = hap;
+  switch (value) {
+    case TargetHeatingCoolingState.AUTO:
+      return DeviceMode.AUTO;
+    case TargetHeatingCoolingState.HEAT:
+      return DeviceMode.HEAT;
+    case TargetHeatingCoolingState.COOL:
+      return DeviceMode.COOL;
+  }
 
-function toCelsius(temperature: number): number {
-  // Convert from Fahrenheit to Celsius
-  const celsius = ((temperature - 32) * 5) / 9;
-  return Math.round(celsius * 10) / 10;
+  return DeviceMode.AUTO;
 }
 
 function toTargetHeatingCoolingState(mode: DeviceMode) {

@@ -1,8 +1,8 @@
-export type DeviceInfo = {
+export interface DeviceInfo extends Record<string, unknown> {
   mac: string;
   icon: string;
   name: string;
-};
+}
 
 export enum DeviceMode {
   AUTO = 1,
@@ -17,7 +17,7 @@ export enum TemperatureUnits {
   FAHRENHEIT = 1,
 }
 
-export type DeviceData = {
+export interface DeviceData extends Record<string, unknown> {
   machineready: boolean;
   manufacturer: {
     _id: number;
@@ -66,7 +66,7 @@ export type DeviceData = {
   name: string;
   timezoneId: string;
   isConnected: boolean;
-};
+}
 
 export type InstallationInfo = {
   _id: string;
@@ -74,7 +74,7 @@ export type InstallationInfo = {
   devices: Array<DeviceInfo>;
   timezoneId: string;
   units: number;
-  schedules: Array<any>;
+  schedules: Array<unknown>;
   added_at: string;
   type: string;
 };
@@ -115,10 +115,14 @@ export type DknLogin = {
   refreshToken: string;
 };
 
+export type DknToken = { token: string; refreshToken: string };
+
 export type ApiConfig = {
   baseUrl: string;
   apiBase: string;
   loginPath: string;
+  loggedInPath: string;
+  refreshPath: string;
   installationsPath: string;
   socketPath: string;
   userAgent?: string;

@@ -1,147 +1,429 @@
-import type { Logging } from "homebridge";
+import type { API, Logging } from "homebridge";
 import fetch, { RequestInit } from "node-fetch";
 import type { DCNAConfig } from "./config";
-import type { DeviceTwin } from "./device";
-import type { ApiConfig, DknLogin, InstallationInfo } from "./types";
-import { Manager } from "socket.io-client";
+import { DeviceTwin } from "./device";
+import type {
+  ApiConfig,
+  DeviceDataMessage,
+  DknLogin,
+  DknToken,
+  InstallationInfo,
+} from "./types";
+import { Manager, Socket } from "socket.io-client";
 import { URL } from "url";
-import { ApiSocket } from "./socket";
 
-const BASE_URL = "https://dkncloudna.com";
-const API_BASE = "/api/v1";
-const API_LOGIN = `/auth/login/dknUsa`;
-const API_INSTALLATIONS = `/installations/dknUsa`;
-const SOCKET_PATH = "/devices/socket.io/";
+import { EventEmitter } from "events";
+import { readFile, writeFile } from "fs";
+import { PLATFORM_NAME } from "./settings";
+import Backoff from "backo2";
+
+const USER_AGENT = `Mozilla/5.0 (iPhone; CPU iPhone OS 15_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148`;
+
+type RequestHeaders = Record<string, string>; // RequestInit["headers"];
 
 const DEFAULT_API_CONFIG: ApiConfig = {
-  baseUrl: BASE_URL,
-  apiBase: API_BASE,
-  loginPath: API_LOGIN,
-  installationsPath: API_INSTALLATIONS,
-  socketPath: SOCKET_PATH,
+  baseUrl: `https://dkncloudna.com`,
+  apiBase: `/api/v1`,
+  loginPath: `/auth/login/dknUsa`,
+  loggedInPath: `/users/isLoggedIn/dknUsa`,
+  refreshPath: `/auth/refreshToken/`,
+  installationsPath: `/installations/dknUsa`,
+  socketPath: `/devices/socket.io/`,
 };
 
-export class Api {
+const DEFAULT_HEADERS: RequestHeaders = {
+  Accept: "application/json",
+  "Content-Type": "application/json",
+  "User-Agent": USER_AGENT,
+};
+
+export type Result<T, E = Error> =
+  | { ok: true; value: T }
+  | { ok: false; error: E };
+
+export class Api extends EventEmitter {
   private config: DCNAConfig & ApiConfig;
+  private client: ApiClient;
+
   private token: string | undefined;
   private refreshToken: string | undefined;
-  private sockets: ApiSocket[] = [];
+  private authenticated = false;
 
-  constructor(config: DCNAConfig, private log: Logging) {
+  private manager: Manager | undefined;
+  private installations: InstallationInfo[] = [];
+  private sockets: Record<string, Socket> = {};
+  private devices: Map<string, DeviceTwin> = new Map();
+
+  private reconnecting = false;
+  private reconnectionAttempts = 5;
+  private backoff = new Backoff({ min: 1000, max: 5000, jitter: 0.5 });
+
+  constructor(
+    config: DCNAConfig,
+    private homebridge: API,
+    private log: Logging
+  ) {
+    super();
     this.config = { ...DEFAULT_API_CONFIG, ...config };
     this.token = config.token;
     this.refreshToken = config.refreshToken;
+    this.client = new ApiClient(this.config, log, this.token);
   }
 
-  async connect(): Promise<void> {
-    const { email, password } = this.config;
+  public async connect(): Promise<void> {
+    this.log.info("Connecting to DKN Cloud NA API");
+    this.authenticated = false;
 
-    if (this.token && this.refreshToken) {
-      // TODO: check the "loggedIn" endpoint with token before logging in
+    // try checking for isLoggedIn
+    if (this.token) {
+      const result = await this.client.isLoggedIn();
+      if (result.ok) {
+        this.authenticated = true;
+      }
     }
 
-    const login: DknLogin = await this._request("POST", this.config.loginPath, {
-      email,
-      password,
-    });
+    // try refresh and login
+    if (!this.authenticated && this.refreshToken) {
+      const result = await this.client.refreshToken(this.refreshToken);
+      if (result.ok) {
+        this.saveTokens(result.value);
+        const loginResult = await this.client.isLoggedIn();
+        this.authenticated = loginResult.ok;
+      }
+    }
 
-    // TODO: save the token information into the homebridge config
-    // save the token
-    this.token = login.token;
-    this.refreshToken = login.refreshToken;
+    // try login with email and password
+    if (!this.authenticated && this.config.email && this.config.password) {
+      const result = await this.client.login(
+        this.config.email,
+        this.config.password
+      );
+      if (result.ok) {
+        this.saveTokens(result.value);
+        this.authenticated = true;
+      }
+    }
 
-    // retrieve the installations
-    const installations: InstallationInfo[] = await this._request(
-      "GET",
-      this.config.installationsPath
-    );
+    if (!this.authenticated) {
+      throw Error("Unable to authenticate to DKN Cloud NA API");
+    }
 
-    // connect to socket
-    const manager = new Manager(this.config.baseUrl, {
-      transports: ["websocket"],
+    await this.refreshInstallations();
+
+    // successfully connected
+    this.reconnecting = false;
+    this.backoff.reset();
+  }
+
+  private async refreshInstallations(): Promise<void> {
+    const result = await this.client.getInstallations();
+
+    if (result.ok) {
+      this.installations = result.value;
+      this.devices = new Map(
+        this.installations.flatMap((install) =>
+          install.devices.map((device) => [
+            device.mac,
+            new DeviceTwin(install._id, device.mac, this, device),
+          ])
+        )
+      );
+
+      this.connectSockets();
+    } else {
+      // remove all devices
+      this.installations = [];
+      this.devices.clear();
+    }
+
+    this.emit("devices", this.devices.values());
+  }
+
+  private connectSockets(): void {
+    this.manager = new Manager(this.config.baseUrl, {
+      transports: ["polling"], // "websocket"],
       path: this.config.apiBase + this.config.socketPath,
       extraHeaders: { Authorization: `Bearer ${this.token}` },
     });
 
-    // connect socket for each installation
-    this.sockets = installations.map(
-      (install) =>
-        new ApiSocket(
-          install,
-          manager.socket(`/${install._id}::dknUsa`, {}),
-          this.log
-        )
-    );
+    this.manager.on("ping", () => {
+      this.log.debug("PING");
+    });
+
+    for (const install of this.installations) {
+      const socket = this.manager.socket(`/${install._id}::dknUsa`, {});
+      socket.on("device-data", this.onDeviceData.bind(this));
+
+      socket.on("connect", () => {
+        this.log.debug(
+          `\x1b[32m[Socket:${install._id}]\x1b[0m \x1b[34mConnected\x1b[0m`
+        );
+      });
+
+      socket.on(
+        "connect_error",
+        (err: { type: string; description: string | number }) => {
+          this.log.debug(
+            `\x1b[32m[Socket:${install._id}]\x1b[0m \x1b[31mConnection Error\x1b[0m`,
+            err.type,
+            err.description
+          );
+          // handle authentication errors
+          if (err.description === 401) {
+            this.disconnect();
+            this.reconnect();
+          }
+        }
+      );
+
+      socket.on("connect_timeout", (timeout: unknown) => {
+        this.log.debug(
+          `\x1b[32m[Socket:${install._id}]\x1b[0m \x1b[31mTimeout\x1b[0m`,
+          timeout
+        );
+      });
+
+      socket.on("reconnecting", (attempt: unknown) => {
+        this.log.debug(
+          `\x1b[32m[Socket:${install._id}]\x1b[0m \x1b[31mReconnecting\x1b[0m`,
+          attempt
+        );
+      });
+
+      socket.on("reconnect", (attempt: unknown) => {
+        this.log.debug(
+          `\x1b[32m[Socket:${install._id}]\x1b[0m \x1b[34mReconnected\x1b[0m`,
+          attempt
+        );
+      });
+
+      socket.on("reconnect_error", (error: unknown) => {
+        this.log.debug(
+          `\x1b[32m[Socket:${install._id}]\x1b[0m \x1b[31mReconnect Error\x1b[0m`,
+          error
+        );
+      });
+
+      socket.on("reconnect_failed", () => {
+        this.log.debug(
+          `\x1b[32m[Socket:${install._id}]\x1b[0m \x1b[31mReconnect Failed\x1b[0m`
+        );
+      });
+
+      socket.on("disconnect", (reason: string) => {
+        this.log.debug(
+          `\x1b[32m[Socket:${install._id}]\x1b[0m \x1b[31mDisconnected\x1b[0m`,
+          reason
+        );
+      });
+
+      socket.on("error", (error: unknown) => {
+        this.log.debug(
+          `\x1b[32m[Socket:${install._id}]\x1b[0m \x1b[31mError\x1b[0m`,
+          error
+        );
+      });
+
+      socket.open();
+      this.sockets[install._id] = socket;
+    }
   }
 
-  getDevices(): DeviceTwin[] {
-    return this.sockets.reduce(
-      (all, item) => [...all, ...item.getDevices()],
-      [] as DeviceTwin[]
-    );
+  private disconnect() {
+    this.log.debug("Disconnecting");
+
+    if (this.sockets) {
+      Object.values(this.sockets).forEach((socket) => {
+        socket.removeAllListeners();
+        socket.close();
+      });
+      this.sockets = {};
+    }
+
+    if (this.manager) {
+      this.manager.removeAllListeners();
+      this.manager.close();
+      this.manager = undefined;
+    }
   }
 
-  private async _request(
-    method: string,
-    path: string,
-    body?: object
-  ): Promise<any> {
-    const url = new URL(`${this.config.baseUrl}${this.config.apiBase}${path}`);
-    const headers: RequestInit["headers"] = {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "User-Agent":
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 14_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile",
+  private reconnect() {
+    if (this.reconnecting) {
+      return;
+    }
+
+    if (this.backoff.attempts >= this.reconnectionAttempts) {
+      this.backoff.reset();
+      this.reconnecting = false;
+      return;
+    }
+
+    this.reconnecting = true;
+    setTimeout(this.connect.bind(this), this.backoff.duration());
+  }
+
+  onDeviceData(message: DeviceDataMessage): void {
+    this.log.debug(
+      `\x1b[32m[Device:${message.mac}]\x1b[0m \x1b[31m⬇\x1b[0m `,
+      message.data
+    );
+    const device = this.devices.get(message.mac);
+    if (device) {
+      device.patch(message.data);
+    }
+  }
+
+  sendMachineEvent(
+    installation: string,
+    mac: string,
+    property: string,
+    value: unknown
+  ): void {
+    const socket = this.sockets[installation];
+    if (!socket) {
+      this.log.error(`Missing socket ${installation}`);
+      return;
+    }
+    if (!socket.connected) {
+      this.log.error(`Socket not connected ${installation}`);
+      return;
+    }
+
+    const machineEvent = {
+      mac,
+      property,
+      value,
     };
+    this.log.debug(
+      `\x1b[32m[Socket:${installation}]\x1b[0m \x1b[34m⬆\x1b[0m `,
+      machineEvent
+    );
+    socket.emit("create-machine-event", machineEvent);
+  }
 
-    if (this.token) {
+  private async saveTokens(tokens: {
+    token: string;
+    refreshToken: string;
+  }): Promise<void> {
+    this.token = tokens.token;
+    this.refreshToken = tokens.refreshToken;
+
+    return new Promise((resolve) => {
+      const configPath = this.homebridge.user.configPath();
+      readFile(configPath, (_, data) => {
+        const config = JSON.parse(data.toString());
+        for (const p of config["platforms"]) {
+          if (p["platform"] === PLATFORM_NAME) {
+            p["token"] = this.token;
+            p["refreshToken"] = this.refreshToken;
+          }
+        }
+        this.log.debug("Saving Tokens", {
+          token: this.token,
+          refreshToken: this.refreshToken,
+        });
+        writeFile(configPath, JSON.stringify(config, null, 2), () => {
+          resolve();
+        });
+      });
+    });
+  }
+}
+
+class ApiClient {
+  constructor(
+    private config: ApiConfig,
+    private log: Logging,
+    public token: string | undefined
+  ) {}
+
+  public async login(
+    email: string,
+    password: string
+  ): Promise<Result<DknLogin>> {
+    return await this._request(this.getUrl(this.config.loginPath), {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+      headers: this.getHeaders(),
+    });
+  }
+
+  public async isLoggedIn(): Promise<Result<DknLogin>> {
+    return await this._request(this.getUrl(this.config.loggedInPath), {
+      method: "GET",
+      headers: this.getHeaders(true),
+    });
+  }
+
+  public async refreshToken(refreshToken: string): Promise<Result<DknToken>> {
+    if (!refreshToken) {
+      return Promise.resolve({
+        ok: false,
+        error: Error("Missing refresh token"),
+      });
+    }
+
+    return await this._request(
+      this.getUrl(this.config.refreshPath + refreshToken + "/dknUsa"),
+      {
+        method: "GET",
+        headers: this.getHeaders(true),
+      }
+    );
+  }
+
+  public async getInstallations(): Promise<Result<InstallationInfo[]>> {
+    return await this._request(this.getUrl(this.config.installationsPath), {
+      method: "GET",
+      headers: this.getHeaders(true),
+    });
+  }
+
+  private getUrl(path: string): URL {
+    return new URL(`${this.config.apiBase}${path}`, this.config.baseUrl);
+  }
+
+  private getHeaders(auth = false): RequestHeaders {
+    const headers: Record<string, string> = { ...DEFAULT_HEADERS };
+    if (auth && this.token) {
       headers["Authorization"] = `Bearer ${this.token}`;
     }
+    return headers;
+  }
 
-    const options: RequestInit = {
-      method,
-      headers,
-    };
-
-    if (body) {
-      options["body"] = JSON.stringify(body);
-    }
-
+  private async _request<T>(
+    url: URL,
+    options: RequestInit
+  ): Promise<Result<T>> {
+    const body = options.body ? JSON.parse(options.body as string) : undefined;
     this.log.debug(
-      `\x1b[32m[Fetch]\x1b[0m \x1b[34m⬆\x1b[0m \x1b[33mRequest: ${method} ${url}` +
-        `${body ? ` body=${JSON.stringify(body, this._obfuscate)}` : ""}\x1b[0m`
+      `\x1b[32m[Fetch]\x1b[0m \x1b[34m⬆\x1b[0m \x1b[33mRequest: ${options.method} ${url}` +
+        `${body ? ` body=${JSON.stringify(body, _obfuscate)}` : ""}\x1b[0m`
     );
-
     const response = await fetch(url, options);
 
-    if (response && response.ok) {
-      this.log.debug(
-        `\x1b[32m[Fetch]\x1b[0m \x1b[31m⬇\x1b[0m \x1b[33mStatus: ${response.status}\x1b[0m`
-      );
-      if (response.status !== 204) {
-        const data = await response.json();
-        this.log.debug(
-          `\x1b[32m[Fetch]\x1b[0m \x1b[31m⬇\x1b[0m \x1b[33mResponse: \x1b[0m`,
-          data
-        );
-        return data;
-      }
-    } else {
-      // TODO refresh the token and retry
-      const data = await response.json();
-      this.log.error(
-        `Error calling to AirzoneCloud. Status: ${response.status} ${response.statusText} ` +
-          `${
-            response.status === 400 ? ` Response: ${JSON.stringify(data)}` : ""
-          }`
-      );
+    let data = undefined;
+    try {
+      data = await response.json();
+    } catch (e) {
+      data = await response.text();
     }
-  }
+    this.log.debug(
+      `\x1b[32m[Fetch]\x1b[0m \x1b[31m⬇\x1b[0m \x1b[33mResponse: (${response.status}: ${response.statusText})\x1b[0m`,
+      data
+    );
 
-  private _obfuscate(key: any, value: any): string {
-    if (key === "password" && typeof value === "string") {
-      return value.replace(/./g, "*");
+    if (response.ok) {
+      return { ok: true, value: data };
+    } else {
+      return { ok: false, error: Error(response.statusText) };
     }
-    return value;
   }
+}
+
+function _obfuscate(key: string, value: unknown): unknown {
+  if (key === "password" && typeof value === "string") {
+    return value.replace(/./g, "*");
+  }
+  return value;
 }

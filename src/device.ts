@@ -1,35 +1,46 @@
 import { DeviceData, DeviceInfo, DeviceMode, TemperatureUnits } from "./types";
 import { EventEmitter } from "events";
-import type { ApiSocket } from "./socket";
+import type { Api } from "./api";
 
-export class DeviceTwin {
-  private emitter = new EventEmitter();
+const EVENT_PROPERTIES = [
+  "work_temp",
+  "setpoint_air_auto",
+  "setpoint_air_cool",
+  "setpoint_air_heat",
+  "real_mode",
+  "mode",
+  "power",
+];
+
+export class DeviceTwin extends EventEmitter {
   private data: DeviceData | DeviceInfo;
 
-  constructor(public mac: string, private socket: ApiSocket, data: DeviceInfo) {
+  constructor(
+    public installation: string,
+    public mac: string,
+    private api: Api,
+    data: DeviceData | DeviceInfo
+  ) {
+    super();
     this.data = data;
   }
 
-  patch(data: Partial<DeviceData | DeviceInfo>) {
+  patch(data: Partial<DeviceData>) {
     this.data = { ...this.data, ...data };
 
-    Object.keys(data).forEach((k) =>
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
-      this.emitter.emit("patch", k, data[k])
-    );
-  }
-
-  addListener(f: (...args: any[]) => any) {
-    this.emitter.addListener("patch", f);
-  }
-
-  removeListener(f: (...args: any[]) => any) {
-    this.emitter.removeListener("patch", f);
+    Object.keys(data).forEach((key) => {
+      if (EVENT_PROPERTIES.includes(key)) {
+        this.emit("patch", key, data[key]);
+      }
+    });
   }
 
   private get device() {
     return this.data as DeviceData;
+  }
+
+  get key(): string {
+    return `${this.installation}:${this.mac}`;
   }
 
   get name(): string {
@@ -42,7 +53,7 @@ export class DeviceTwin {
 
   set power(value: boolean) {
     if (value !== this.power) {
-      this.socket.createMachineEvent(this.mac, "power", value);
+      this.sendEvent("power", value);
       this.device.power = value;
     }
   }
@@ -52,7 +63,7 @@ export class DeviceTwin {
   }
 
   set mode(value: DeviceMode) {
-    this.socket.createMachineEvent(this.mac, "mode", value);
+    this.sendEvent("mode", value);
     this.device.mode = value;
   }
 
@@ -60,14 +71,19 @@ export class DeviceTwin {
     return this.device.real_mode;
   }
 
-  get workTemp(): number {
-    return (
-      this.device.work_temp ||
-      (this.device.units === TemperatureUnits.CELSIUS ? 0 : 32)
-    );
+  get currentTemperature(): number {
+    let value = this.device.work_temp;
+
+    if (value === undefined) {
+      value = this.device.units === TemperatureUnits.CELSIUS ? 0 : 32;
+    }
+
+    return this.device.units === TemperatureUnits.FAHRENHEIT
+      ? toCelsius(value)
+      : value;
   }
 
-  get targetTemperature(): number {
+  get setpointTemperature(): number {
     switch (this.mode) {
       case DeviceMode.AUTO:
         return this.device.setpoint_air_auto;
@@ -80,18 +96,30 @@ export class DeviceTwin {
     }
   }
 
-  set targetTemperature(value: number) {
+  get targetTemperature(): number {
+    const value = this.setpointTemperature;
+    return this.device.units === TemperatureUnits.FAHRENHEIT
+      ? toCelsius(value)
+      : value;
+  }
+
+  set targetTemperature(celsiusValue: number) {
+    const value =
+      this.device.units === TemperatureUnits.FAHRENHEIT
+        ? toFahrenheit(celsiusValue)
+        : celsiusValue;
+
     switch (this.mode) {
       case DeviceMode.AUTO:
-        this.socket.createMachineEvent(this.mac, "setpoint_air_auto", value);
+        this.sendEvent("setpoint_air_auto", value);
         this.device.setpoint_air_auto = value;
         break;
       case DeviceMode.COOL:
-        this.socket.createMachineEvent(this.mac, "setpoint_air_cool", value);
+        this.sendEvent("setpoint_air_cool", value);
         this.device.setpoint_air_cool = value;
         break;
       case DeviceMode.HEAT:
-        this.socket.createMachineEvent(this.mac, "setpoint_air_heat", value);
+        this.sendEvent("setpoint_air_heat", value);
         this.device.setpoint_air_heat = value;
         break;
     }
@@ -100,4 +128,20 @@ export class DeviceTwin {
   get temperatureUnits(): TemperatureUnits {
     return this.device.units;
   }
+
+  private sendEvent(property: string, value: unknown): void {
+    this.api.sendMachineEvent(this.installation, this.mac, property, value);
+  }
+}
+
+function toFahrenheit(temperature: number): number {
+  // Convert from Celsius to Fahrenheit
+  const fahrenheit = (temperature * 9) / 5 + 32;
+  return Math.round(fahrenheit);
+}
+
+function toCelsius(temperature: number): number {
+  // Convert from Fahrenheit to Celsius
+  const celsius = ((temperature - 32) * 5) / 9;
+  return Math.round(celsius * 10) / 10;
 }

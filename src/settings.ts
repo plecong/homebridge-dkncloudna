@@ -6,4 +6,4 @@ export const PLATFORM_NAME = "dkncloudna";
 /**
  * This must match the name of your plugin as defined the package.json
  */
-export const PLUGIN_NAME = "homebridge-dkncloudna";
+export const PLUGIN_NAME = "@plecong/homebridge-dkncloudna";
