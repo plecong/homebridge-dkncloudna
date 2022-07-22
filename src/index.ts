@@ -1,5 +1,7 @@
 import type { API } from "homebridge";
-import { DknCloudNaPlatform, PLATFORM_NAME, PLUGIN_NAME } from "./platform";
+import { DknCloudNaPlatform } from "./platform";
+import { PLATFORM_NAME, PLUGIN_NAME } from "./settings";
+
 import { setHap } from "./hap";
 
 export default function (api: API) {
