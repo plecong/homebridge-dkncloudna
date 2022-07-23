@@ -16,6 +16,7 @@ import { EventEmitter } from "events";
 import { readFile, writeFile } from "fs";
 import { PLATFORM_NAME } from "./settings";
 import Backoff from "backo2";
+import { NetworkLogger } from "./logger";
 
 const USER_AGENT = `Mozilla/5.0 (iPhone; CPU iPhone OS 15_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148`;
 
@@ -141,33 +142,25 @@ export class Api extends EventEmitter {
 
   private connectSockets(): void {
     this.manager = new Manager(this.config.baseUrl, {
-      transports: ["polling"], // "websocket"],
+      transports: ["polling", "websocket"],
       path: this.config.apiBase + this.config.socketPath,
       extraHeaders: { Authorization: `Bearer ${this.token}` },
     });
 
-    this.manager.on("ping", () => {
-      this.log.debug("PING");
-    });
-
     for (const install of this.installations) {
       const socket = this.manager.socket(`/${install._id}::dknUsa`, {});
-      socket.on("device-data", this.onDeviceData.bind(this));
+      const logger = new NetworkLogger(this.log, `Socket:${install._id}`);
 
-      socket.on("connect", () => {
-        this.log.debug(
-          `\x1b[32m[Socket:${install._id}]\x1b[0m \x1b[34mConnected\x1b[0m`
-        );
+      socket.on("device-data", (message: DeviceDataMessage) => {
+        const { mac, data } = message;
+        logger.receive(`[Device:${mac}]`, data);
+        this.devices.get(mac)?.patch(data);
       });
 
       socket.on(
         "connect_error",
         (err: { type: string; description: string | number }) => {
-          this.log.debug(
-            `\x1b[32m[Socket:${install._id}]\x1b[0m \x1b[31mConnection Error\x1b[0m`,
-            err.type,
-            err.description
-          );
+          logger.error("Connection Error", err.type, err.description);
           // handle authentication errors
           if (err.description === 401) {
             this.disconnect();
@@ -176,52 +169,29 @@ export class Api extends EventEmitter {
         }
       );
 
-      socket.on("connect_timeout", (timeout: unknown) => {
-        this.log.debug(
-          `\x1b[32m[Socket:${install._id}]\x1b[0m \x1b[31mTimeout\x1b[0m`,
-          timeout
-        );
+      socket.on("connect", () => {
+        logger.status("Connected");
       });
-
-      socket.on("reconnecting", (attempt: unknown) => {
-        this.log.debug(
-          `\x1b[32m[Socket:${install._id}]\x1b[0m \x1b[31mReconnecting\x1b[0m`,
-          attempt
-        );
+      socket.on("connect_timeout", (timeout: number) => {
+        logger.error("Connection Timeout", timeout);
       });
-
-      socket.on("reconnect", (attempt: unknown) => {
-        this.log.debug(
-          `\x1b[32m[Socket:${install._id}]\x1b[0m \x1b[34mReconnected\x1b[0m`,
-          attempt
-        );
+      socket.on("reconnecting", (attempt: number) => {
+        logger.error("Reconnecting", `attempt=${attempt}`);
       });
-
+      socket.on("reconnect", (attempt: number) => {
+        logger.status("Reconnected", `attempt=${attempt}`);
+      });
       socket.on("reconnect_error", (error: unknown) => {
-        this.log.debug(
-          `\x1b[32m[Socket:${install._id}]\x1b[0m \x1b[31mReconnect Error\x1b[0m`,
-          error
-        );
+        logger.error("Reconnect Error", error);
       });
-
       socket.on("reconnect_failed", () => {
-        this.log.debug(
-          `\x1b[32m[Socket:${install._id}]\x1b[0m \x1b[31mReconnect Failed\x1b[0m`
-        );
+        logger.error("Reconnect Failed");
       });
-
       socket.on("disconnect", (reason: string) => {
-        this.log.debug(
-          `\x1b[32m[Socket:${install._id}]\x1b[0m \x1b[31mDisconnected\x1b[0m`,
-          reason
-        );
+        logger.status("Disconnected", `reason=${reason}`);
       });
-
       socket.on("error", (error: unknown) => {
-        this.log.debug(
-          `\x1b[32m[Socket:${install._id}]\x1b[0m \x1b[31mError\x1b[0m`,
-          error
-        );
+        logger.error("Error", error);
       });
 
       socket.open();
@@ -262,17 +232,6 @@ export class Api extends EventEmitter {
     setTimeout(this.connect.bind(this), this.backoff.duration());
   }
 
-  onDeviceData(message: DeviceDataMessage): void {
-    this.log.debug(
-      `\x1b[32m[Device:${message.mac}]\x1b[0m \x1b[31m⬇\x1b[0m `,
-      message.data
-    );
-    const device = this.devices.get(message.mac);
-    if (device) {
-      device.patch(message.data);
-    }
-  }
-
   sendMachineEvent(
     installation: string,
     mac: string,
@@ -280,12 +239,14 @@ export class Api extends EventEmitter {
     value: unknown
   ): void {
     const socket = this.sockets[installation];
+    const logger = new NetworkLogger(this.log, `Socket:${installation}`);
+
     if (!socket) {
-      this.log.error(`Missing socket ${installation}`);
+      logger.error(`Missing socket`);
       return;
     }
     if (!socket.connected) {
-      this.log.error(`Socket not connected ${installation}`);
+      logger.error(`Socket not connected`);
       return;
     }
 
@@ -294,10 +255,7 @@ export class Api extends EventEmitter {
       property,
       value,
     };
-    this.log.debug(
-      `\x1b[32m[Socket:${installation}]\x1b[0m \x1b[34m⬆\x1b[0m `,
-      machineEvent
-    );
+    logger.send(`create-machine-event`, machineEvent);
     socket.emit("create-machine-event", machineEvent);
   }
 
@@ -307,6 +265,7 @@ export class Api extends EventEmitter {
   }): Promise<void> {
     this.token = tokens.token;
     this.refreshToken = tokens.refreshToken;
+    this.client.token = this.token;
 
     return new Promise((resolve) => {
       const configPath = this.homebridge.user.configPath();
@@ -331,11 +290,15 @@ export class Api extends EventEmitter {
 }
 
 class ApiClient {
+  private log: NetworkLogger;
+
   constructor(
     private config: ApiConfig,
-    private log: Logging,
+    log: Logging,
     public token: string | undefined
-  ) {}
+  ) {
+    this.log = new NetworkLogger(log, "Fetch");
+  }
 
   public async login(
     email: string,
@@ -396,20 +359,21 @@ class ApiClient {
     options: RequestInit
   ): Promise<Result<T>> {
     const body = options.body ? JSON.parse(options.body as string) : undefined;
-    this.log.debug(
-      `\x1b[32m[Fetch]\x1b[0m \x1b[34m⬆\x1b[0m \x1b[33mRequest: ${options.method} ${url}` +
-        `${body ? ` body=${JSON.stringify(body, _obfuscate)}` : ""}\x1b[0m`
+    this.log.send(
+      `Request: ${options.method} ${url} ${
+        body ? ` body=${JSON.stringify(body, _obfuscate)}` : ""
+      }`
     );
-    const response = await fetch(url, options);
 
+    const response = await fetch(url, options);
     let data = undefined;
     try {
       data = await response.json();
     } catch (e) {
       data = await response.text();
     }
-    this.log.debug(
-      `\x1b[32m[Fetch]\x1b[0m \x1b[31m⬇\x1b[0m \x1b[33mResponse: (${response.status}: ${response.statusText})\x1b[0m`,
+    this.log.receive(
+      `Response: (${response.status}: ${response.statusText})`,
       data
     );
 
