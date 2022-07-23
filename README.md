@@ -1,6 +1,6 @@
 # Homebridge DKN Cloud NA
 
-This [Homebridge](https://github.com/homebridge/homebridge) plugin provides a platform for connecting [DKN Cloud NA](https://dkncloudna.com) connected devices to Apple's [HomeKit](http://www.apple.com/ios/home/). 
+This [Homebridge](https://github.com/homebridge/homebridge) plugin provides a platform for connecting [DKN Cloud NA](https://dkncloudna.com) connected devices to Apple's [HomeKit](http://www.apple.com/ios/home/).
 
 ### Prerequisites
 
@@ -9,13 +9,14 @@ This [Homebridge](https://github.com/homebridge/homebridge) plugin provides a pl
 ### Installation
 
 To install Homebridge DKN Cloud NA Plugin:
+
 1. Follow the instructions on the [Homebridge Wiki](https://github.com/homebridge/homebridge/wiki) to install Node.js and Homebridge
 1. Install the Homebridge DKN Cloud NA Plugin through [Homebridge Config UI X](https://github.com/oznu/homebridge-config-ui-x) or manually by:
-  ```
-  $ npm -g i @plecong/homebridge-dkncloudna
-  ```
+
+```
+npm -g i @plecong/homebridge-dkncloudna
+```
 
 ### Configuration
 
 TBD
-
