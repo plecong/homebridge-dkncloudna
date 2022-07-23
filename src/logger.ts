@@ -27,7 +27,7 @@ export class NetworkLogger {
     if (!NetworkLogger.enabled) return;
 
     this.log.debug(
-      `\x1b[32m[${this.context}]\x1b[0m \x1b[31m${message}\x1b[0m`,
+      `\x1b[32m[${this.context}]\x1b[0m \x1b[34m${message}\x1b[0m`,
       ...args
     );
   }
