@@ -3,14 +3,31 @@
   "pluginType": "platform",
   "singular": true,
   "customUi": true,
+  "headerDisplay": "Enter your login information for the DKN Cloud NA app",
   "schema": {
     "type": "object",
     "properties": {
-      "name": {
-        "title": "Name",
+      "email": {
+        "title": "Email Address",
         "type": "string",
-        "required": true,
-        "default": "DKN Cloud NA"
+        "required": false
+      },
+      "password": {
+        "title": "Password",
+        "type": "string",
+        "required": false
+      },
+      "token": {
+        "title": "Access Token",
+        "description": "Token used to access DKN Cloud NA",
+        "type": "string",
+        "required": false
+      },
+      "refreshToken": {
+        "title": "Refresh Token",
+        "description": "Token used to refresh the Access Token when expired",
+        "type": "string",
+        "required": false
       }
     }
   }
