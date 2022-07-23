@@ -5,7 +5,6 @@ import { DeviceTwin } from "./device";
 import type {
   ApiConfig,
   DeviceDataMessage,
-  DeviceInfo,
   DknLogin,
   DknToken,
   InstallationInfo,
