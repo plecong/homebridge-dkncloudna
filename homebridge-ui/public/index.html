@@ -1,0 +1,134 @@
+<script src="//unpkg.com/alpinejs"></script>
+<script>
+  Alpine.data("config", () => ({
+    config: {},
+    email: "",
+    password: "",
+    remember: false,
+    async init() {
+      const pluginConfig = await homebridge.getPluginConfig();
+      if (pluginConfig && pluginConfig.length) {
+        const config = pluginConfig[0];
+        this.config = config;
+        this.email = config.email || "";
+        this.password = config.password || "";
+        this.remember = !!(this.email && this.password);
+      }
+    },
+    async updateConfig() {
+      const updated = Object.assign({}, this.config);
+      if (this.remember) {
+        updated.email = this.email;
+        updated.password = this.password;
+      } else {
+        delete updated.email;
+        delete updated.password;
+      }
+      await homebridge.updatePluginConfig([updated]);
+    },
+    async submit() {
+      try {
+        const response = await homebridge.request("/login", {
+          email: this.email,
+          password: this.password,
+        });
+
+        this.config.token = response.token;
+        this.config.refreshToken = response.refreshToken;
+        await this.updateConfig();
+        homebridge.toast.success("Tokens retrieved", "Login Success");
+      } catch (e) {
+        homebridge.toast.error(e.error.data.msg, "Login Failed");
+      }
+    },
+    get open() {
+      return !!(this.config.token && this.config.refreshToken);
+    },
+  }));
+</script>
+
+<p>
+  Enter your login information for the DKN Cloud NA app below and select
+  "Retrieve Tokens" to save access and refresh tokens.
+</p>
+<p>
+  Optionally, select "Remember Login" to save the password directly within the
+  Homebridge configuration file. The configuration file is NOT secure, however
+  saving your login information will ensure the plugin can always connect to DKN
+  Cloud NA.
+</p>
+<form class="mb-3" x-data="config" x-on:submit.prevent="submit">
+  <div class="form-group">
+    <label for="email">Email Address</label>
+    <input x-model="email" id="email" type="email" class="form-control" />
+  </div>
+  <div class="form-group">
+    <label for="password">Password</label>
+    <input
+      x-model="password"
+      id="password"
+      type="password"
+      class="form-control"
+    />
+  </div>
+  <div class="form-row">
+    <div class="col-8 form-group">
+      <div class="form-check">
+        <input
+          x-model="remember"
+          x-on:change="updateConfig"
+          id="remember"
+          type="checkbox"
+          class="form-check-input"
+        />
+        <label class="form-check-label" for="remember">Remember Login</label>
+        <small id="emailHelp" class="form-text text-muted">
+          Save the password in the Homebridge <code>config.json</code>
+        </small>
+      </div>
+    </div>
+    <div class="col-4 d-flex justify-content-end align-items-center">
+      <button
+        x-on:click.prevent="submit"
+        x-bind:disabled="empty"
+        type="submit"
+        class="btn btn-primary"
+      >
+        Retrieve Tokens
+      </button>
+    </div>
+  </div>
+  <div x-show="open">
+    <hr />
+    <div class="input-group mb-3">
+      <div class="input-group-prepend">
+        <span class="input-group-text" id="token-addon">Access Token</span>
+      </div>
+      <input
+        x-model="config.token"
+        id="token"
+        type="text"
+        class="form-control"
+        aria-label="Access Token"
+        aria-describedby="token-addon"
+        disabled
+      />
+    </div>
+    <div class="input-group mb-3">
+      <div class="input-group-prepend">
+        <span class="input-group-text" id="refreshToken-addon"
+          >Refresh Token</span
+        >
+      </div>
+      <input
+        x-model="config.refreshToken"
+        id="refreshToken"
+        type="text"
+        class="form-control"
+        aria-label="Refresh Token"
+        aria-describedby="refreshToken-addon"
+        disabled
+      />
+    </div>
+  </div>
+</form>
