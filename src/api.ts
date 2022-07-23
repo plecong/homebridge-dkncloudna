@@ -152,6 +152,8 @@ export class Api extends EventEmitter {
   }
 
   private connectSockets(): void {
+    this.disconnect();
+
     this.manager = new Manager(this.config.baseUrl, {
       transports: ["polling", "websocket"],
       path: this.config.apiBase + this.config.socketPath,
@@ -159,14 +161,23 @@ export class Api extends EventEmitter {
     });
 
     this.usersSocket = this.manager.socket("/users", {});
-    this.usersSocket
-      .on("connect_error", this.onConnectError.bind(this))
-      .on("control-deleted-installation", this.onDeletedInstallation.bind(this))
-      .on("control-deleted-device", this.onDeleteDevice.bind(this))
-      .on("control-new-device", this.onNewDevice.bind(this));
-
     const usersLog = new NetworkLogger(this.log, `Socket:users`);
     usersLog.attachLogging(this.usersSocket);
+
+    this.usersSocket
+      .on("connect_error", this.onConnectError.bind(this))
+      .on("control-deleted-installation", (c: InstallationControl) => {
+        usersLog.receive("control-deleted-installation", c);
+        this.onDeletedInstallation(c);
+      })
+      .on("control-deleted-device", (d: DeviceControl) => {
+        usersLog.receive("control-deleted-device", d);
+        this.onDeleteDevice(d);
+      })
+      .on("control-new-device", (d: DeviceControl) => {
+        usersLog.receive("control-new-device", d);
+        this.onNewDevice();
+      });
 
     for (const install of this.installations) {
       const socket = this.manager.socket(`/${install._id}::dknUsa`, {});
@@ -176,7 +187,7 @@ export class Api extends EventEmitter {
 
       socket.on("device-data", (message: DeviceDataMessage) => {
         const { mac, data } = message;
-        logger.receive(`[Device:${mac}]`, data);
+        logger.receive(`[${mac}]`, data);
         this.devices.get(mac)?.patch(data);
       });
 

@@ -108,11 +108,15 @@ export class DknCloudNaPlatform implements DynamicPlatformPlugin {
       .map((id) => this.accessories[id]!);
 
     staleAccessories.forEach((staleAccessory) => {
+      const uuid = staleAccessory.UUID;
       this.log.info(
-        `Removing stale cached accessory ${staleAccessory.UUID} ${staleAccessory.displayName}`
+        `Removing stale cached accessory ${uuid} ${staleAccessory.displayName}`
       );
-      if (this.devices[staleAccessory.UUID]) {
-        delete this.devices[staleAccessory.UUID];
+      if (this.devices[uuid]) {
+        delete this.devices[uuid];
+      }
+      if (this.accessories[uuid]) {
+        delete this.accessories[uuid];
       }
     });
 
