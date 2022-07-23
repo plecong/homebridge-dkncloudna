@@ -23,18 +23,19 @@
     "airzone",
     "DKN"
   ],
-  "main": "dist/index.js",
+  "main": "lib/index.js",
   "files": [
     "LICENSE",
+    "NOTICE.md",
     "config.schema.json",
-    "dist",
+    "lib",
     "homebridge-ui"
   ],
   "scripts": {
     "lint": "eslint src/**.ts --max-warnings=0",
     "watch": "npm run build && npm link && nodemon",
-    "clean": "rimraf ./dist",
-    "build": "rimraf ./dist && tsc",
+    "clean": "rimraf ./lib",
+    "build": "rimraf ./lib && tsc",
     "prepublishOnly": "npm run build",
     "postpublish": "npm run clean",
     "test": "echo \"Error: no test specified\" && exit 1"

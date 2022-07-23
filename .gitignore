@@ -1,4 +1,5 @@
 # Ignore compiled code
+lib
 dist
 
 # ------------- Defaults ------------- #

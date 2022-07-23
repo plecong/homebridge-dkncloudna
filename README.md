@@ -42,3 +42,8 @@ This plugin can be configured manually using your email and password used to log
     "password": "<your password>"
 }
 ```
+
+## Credits
+
+- [homebridge-airzone-cloud](https://github.com/fjhorrillo/homebridge-airzone-cloud) Copyright &copy; 2021 Francisco Javier Horrillo Sancho. All rights reserved.
+- [homebridge-ring](https://github.com/dgreif/ring) Copyright &copy; 2019 Dusty Greif
