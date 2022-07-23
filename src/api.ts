@@ -5,6 +5,7 @@ import { DeviceTwin } from "./device";
 import type {
   ApiConfig,
   DeviceDataMessage,
+  DeviceInfo,
   DknLogin,
   DknToken,
   InstallationInfo,
@@ -42,6 +43,15 @@ export type Result<T, E = Error> =
   | { ok: true; value: T }
   | { ok: false; error: E };
 
+type DeviceControl = {
+  installation_id: string;
+  mac: string;
+};
+
+type InstallationControl = {
+  installation_id: string;
+};
+
 export class Api extends EventEmitter {
   private config: DCNAConfig & ApiConfig;
   private client: ApiClient;
@@ -51,8 +61,10 @@ export class Api extends EventEmitter {
   private authenticated = false;
 
   private manager: Manager | undefined;
-  private installations: InstallationInfo[] = [];
+  private usersSocket: Socket | undefined;
   private sockets: Record<string, Socket> = {};
+
+  private installations: InstallationInfo[] = [];
   private devices: Map<string, DeviceTwin> = new Map();
 
   private reconnecting = false;
@@ -147,9 +159,21 @@ export class Api extends EventEmitter {
       extraHeaders: { Authorization: `Bearer ${this.token}` },
     });
 
+    this.usersSocket = this.manager.socket("/users", {});
+    this.usersSocket
+      .on("connect_error", this.onConnectError.bind(this))
+      .on("control-deleted-installation", this.onDeletedInstallation.bind(this))
+      .on("control-deleted-device", this.onDeleteDevice.bind(this))
+      .on("control-new-device", this.onNewDevice.bind(this));
+
+    const usersLog = new NetworkLogger(this.log, `Socket:users`);
+    usersLog.attachLogging(this.usersSocket);
+
     for (const install of this.installations) {
       const socket = this.manager.socket(`/${install._id}::dknUsa`, {});
       const logger = new NetworkLogger(this.log, `Socket:${install._id}`);
+      logger.attachLogging(socket);
+      socket.on("connect_error", this.onConnectError.bind(this));
 
       socket.on("device-data", (message: DeviceDataMessage) => {
         const { mac, data } = message;
@@ -157,45 +181,51 @@ export class Api extends EventEmitter {
         this.devices.get(mac)?.patch(data);
       });
 
-      socket.on(
-        "connect_error",
-        (err: { type: string; description: string | number }) => {
-          logger.error("Connection Error", err.type, err.description);
-          // handle authentication errors
-          if (err.description === 401) {
-            this.disconnect();
-            this.reconnect();
-          }
-        }
-      );
-
-      socket.on("connect", () => {
-        logger.status("Connected");
-      });
-      socket.on("connect_timeout", (timeout: number) => {
-        logger.error("Connection Timeout", timeout);
-      });
-      socket.on("reconnecting", (attempt: number) => {
-        logger.error("Reconnecting", `attempt=${attempt}`);
-      });
-      socket.on("reconnect", (attempt: number) => {
-        logger.status("Reconnected", `attempt=${attempt}`);
-      });
-      socket.on("reconnect_error", (error: unknown) => {
-        logger.error("Reconnect Error", error);
-      });
-      socket.on("reconnect_failed", () => {
-        logger.error("Reconnect Failed");
-      });
-      socket.on("disconnect", (reason: string) => {
-        logger.status("Disconnected", `reason=${reason}`);
-      });
-      socket.on("error", (error: unknown) => {
-        logger.error("Error", error);
-      });
-
-      socket.open();
       this.sockets[install._id] = socket;
+    }
+  }
+
+  private onDeletedInstallation(control: InstallationControl) {
+    // remove from installation
+    const remove = this.installations.findIndex(
+      (x) => x._id === control.installation_id
+    );
+    if (remove > -1) {
+      this.installations.splice(remove, 1);
+    }
+
+    // remove devices
+    for (const [key, value] of this.devices) {
+      if (value.installation === control.installation_id) {
+        this.devices.delete(key);
+      }
+    }
+
+    // close sockets
+    const socket = this.sockets[control.installation_id];
+    if (socket) {
+      socket.close();
+      delete this.sockets[control.installation_id];
+    }
+
+    this.emit("devices", this.devices.values());
+  }
+
+  private onDeleteDevice(control: DeviceControl) {
+    this.devices.delete(control.mac);
+    this.emit("devices", this.devices.values());
+  }
+
+  private onNewDevice() {
+    this.refreshInstallations();
+  }
+
+  private onConnectError(err: { type: string; description: number }): void {
+    this.log.debug("Connection Error", err.type, err.description);
+    // handle authentication errors
+    if (err.description === 401) {
+      this.disconnect();
+      this.reconnect();
     }
   }
 
@@ -208,6 +238,12 @@ export class Api extends EventEmitter {
         socket.close();
       });
       this.sockets = {};
+    }
+
+    if (this.usersSocket) {
+      this.usersSocket.removeAllListeners();
+      this.usersSocket.close();
+      this.usersSocket = undefined;
     }
 
     if (this.manager) {
