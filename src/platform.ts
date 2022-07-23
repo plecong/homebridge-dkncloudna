@@ -40,10 +40,8 @@ export class DknCloudNaPlatform implements DynamicPlatformPlugin {
      * This event can also be used to start discovery of new accessories.
      */
     api.on(APIEvent.DID_FINISH_LAUNCHING, () => {
-      log.debug("didFinishLaunching");
       this.cloud.connect().catch((e) => {
-        this.log.error("Error connecting to API");
-        this.log.error(e);
+        this.log.error("Error connecting to API", e);
       });
     });
   }
@@ -56,7 +54,6 @@ export class DknCloudNaPlatform implements DynamicPlatformPlugin {
     this.log.info(
       `Configuring cached accessory ${accessory.UUID} ${accessory.displayName}`
     );
-    this.log.debug("%j", accessory);
     this.accessories[accessory.UUID] = accessory;
   }
 
