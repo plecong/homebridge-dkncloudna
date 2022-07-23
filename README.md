@@ -1,6 +1,6 @@
 # Homebridge DKN Cloud NA
 
-This [Homebridge](https://github.com/homebridge/homebridge) plugin provides a platform for connecting [DKN Cloud NA](https://dkncloudna.com) connected devices to Apple's [HomeKit](http://www.apple.com/ios/home/).
+This [Homebridge](https://github.com/homebridge/homebridge) plugin provides a platform for connecting devices using [DKN Cloud NA](https://dkncloudna.com) to Apple's [HomeKit](http://www.apple.com/ios/home/).
 
 ## Installation
 

@@ -1,6 +1,5 @@
 {
-  "private": true,
-  "displayName": "Homebridge DKN Cloud NA Plugin",
+  "displayName": "Homebridge DKN Cloud NA",
   "name": "@plecong/homebridge-dkncloudna",
   "version": "0.1.0",
   "description": "Homebridge plugin for DKN Cloud NA",
