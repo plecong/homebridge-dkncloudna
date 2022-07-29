@@ -12,6 +12,8 @@ export enum DeviceMode {
   DRY = 5,
 }
 
+export type SpeedState = 0 | 2 | 3 | 4 | 5 | 6;
+
 export enum TemperatureUnits {
   CELSIUS = 0,
   FAHRENHEIT = 1,
@@ -45,7 +47,7 @@ export interface DeviceData extends Record<string, unknown> {
   setpoint_air_heat: number;
   error_value: number;
   speed_available: Array<number>;
-  speed_state: number;
+  speed_state: SpeedState;
   setpoint_air_auto: number;
   version: string;
   range_sp_cool_air_max: number;
