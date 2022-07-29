@@ -220,7 +220,13 @@ export class Api extends EventEmitter {
   }
 
   private disconnect() {
-    this.log.info("Disconnecting from DKN Cloud NA API");
+    if (
+      Object.values(this.sockets).length ||
+      this.usersSocket ||
+      this.manager
+    ) {
+      this.log.info("Disconnecting from DKN Cloud NA API");
+    }
 
     if (this.sockets) {
       Object.values(this.sockets).forEach((socket) => {
