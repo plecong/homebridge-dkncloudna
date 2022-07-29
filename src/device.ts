@@ -1,8 +1,15 @@
-import { DeviceData, DeviceInfo, DeviceMode, TemperatureUnits } from "./types";
+import {
+  DeviceData,
+  DeviceInfo,
+  DeviceMode,
+  SpeedState,
+  TemperatureUnits,
+} from "./types";
 import { EventEmitter } from "events";
 import type { Api } from "./api";
 
 const EVENT_PROPERTIES = [
+  "ext_temp",
   "work_temp",
   "setpoint_air_auto",
   "setpoint_air_cool",
@@ -10,7 +17,11 @@ const EVENT_PROPERTIES = [
   "real_mode",
   "mode",
   "power",
+  "slats_vertical_1",
+  "speed_state",
 ];
+
+export const FAN_SPEED_AUTO = 50;
 
 export class DeviceTwin extends EventEmitter {
   private data: DeviceData | DeviceInfo;
@@ -75,12 +86,10 @@ export class DeviceTwin extends EventEmitter {
     let value = this.device.work_temp;
 
     if (value === undefined) {
-      value = this.device.units === TemperatureUnits.CELSIUS ? 0 : 32;
+      value = this.getDefaultTargetTemperature();
     }
 
-    return this.device.units === TemperatureUnits.FAHRENHEIT
-      ? toCelsius(value)
-      : value;
+    return this.getOutputTemperature(value);
   }
 
   get setpointTemperature(): number {
@@ -92,22 +101,50 @@ export class DeviceTwin extends EventEmitter {
       case DeviceMode.HEAT:
         return this.device.setpoint_air_heat;
       default:
-        return this.device.units === TemperatureUnits.CELSIUS ? 0 : 32;
+        return this.getDefaultTargetTemperature();
     }
+  }
+
+  get coolingTemperature(): number {
+    const value =
+      this.device.setpoint_air_cool || this.getDefaultTargetTemperature();
+    return this.getOutputTemperature(value);
+  }
+
+  set coolingTemperature(celsiusValue: number) {
+    const value =
+      this.device.units === TemperatureUnits.CELSIUS
+        ? celsiusValue
+        : toFahrenheit(celsiusValue);
+
+    this.sendEvent("setpoint_air_cool", value);
+  }
+
+  get heatingTemperature(): number {
+    const value =
+      this.device.setpoint_air_heat || this.getDefaultTargetTemperature();
+    return this.getOutputTemperature(value);
+  }
+
+  set heatingTemperature(celsiusValue: number) {
+    const value =
+      this.device.units === TemperatureUnits.CELSIUS
+        ? celsiusValue
+        : toFahrenheit(celsiusValue);
+
+    this.sendEvent("setpoint_air_heat", value);
   }
 
   get targetTemperature(): number {
     const value = this.setpointTemperature;
-    return this.device.units === TemperatureUnits.FAHRENHEIT
-      ? toCelsius(value)
-      : value;
+    return this.getOutputTemperature(value);
   }
 
   set targetTemperature(celsiusValue: number) {
     const value =
-      this.device.units === TemperatureUnits.FAHRENHEIT
-        ? toFahrenheit(celsiusValue)
-        : celsiusValue;
+      this.device.units === TemperatureUnits.CELSIUS
+        ? celsiusValue
+        : toFahrenheit(celsiusValue);
 
     switch (this.mode) {
       case DeviceMode.AUTO:
@@ -127,6 +164,66 @@ export class DeviceTwin extends EventEmitter {
 
   get temperatureUnits(): TemperatureUnits {
     return this.device.units;
+  }
+
+  get exteriorTemperature(): number {
+    let value = this.device.ext_temp;
+
+    if (value === undefined) {
+      value = this.getDefaultTargetTemperature();
+    }
+
+    return this.getOutputTemperature(value);
+  }
+
+  get louverEnabled(): boolean {
+    return this.device.slats_vertical_1 === 9;
+  }
+
+  set louverEnabled(enabled: boolean) {
+    const value = enabled ? 9 : 0;
+    this.sendEvent("slats_vertical_1", value);
+    this.device.slats_vertical_1 = value;
+  }
+
+  get fanSpeed(): number {
+    switch (this.device.speed_state) {
+      case 0:
+        return FAN_SPEED_AUTO;
+      case 2:
+        return 20;
+      case 3:
+        return 40;
+      case 4:
+        return 60;
+      case 5:
+        return 80;
+      case 6:
+        return 100;
+      default:
+        return 50;
+    }
+  }
+
+  set fanSpeed(pct: number) {
+    let value: SpeedState;
+    if (pct === FAN_SPEED_AUTO) {
+      value = 0;
+    } else {
+      value = (Math.round(pct / 20) + 1) as SpeedState;
+    }
+    this.device.speed_state = value;
+    this.sendEvent("speed_state", value);
+  }
+
+  private getOutputTemperature(value = 0): number {
+    return this.device.units === TemperatureUnits.CELSIUS
+      ? value
+      : toCelsius(value);
+  }
+
+  private getDefaultTargetTemperature(): number {
+    return this.device.units === TemperatureUnits.CELSIUS ? 22.2 : 72;
   }
 
   private sendEvent(property: string, value: unknown): void {
