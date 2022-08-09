@@ -12,11 +12,12 @@ import type { DCNAConfig } from "./config";
 import { hap } from "./hap";
 import { PLATFORM_NAME, PLUGIN_NAME } from "./settings";
 import type { DeviceTwin } from "./device";
+import type { HeaterCooler } from "./HeaterCooler";
 
 export class DknCloudNaPlatform implements DynamicPlatformPlugin {
   private readonly config: PlatformConfig & DCNAConfig;
   private readonly accessories: Record<string, PlatformAccessory> = {};
-  private readonly devices: Record<string, DeviceAccessory> = {};
+  private readonly devices: Record<string, DeviceAccessory | HeaterCooler> = {};
   private readonly cloud: Api;
 
   constructor(

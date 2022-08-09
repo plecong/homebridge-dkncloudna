@@ -27,7 +27,7 @@ export class DeviceAccessory {
     private device: DeviceTwin,
     private accessory: PlatformAccessory,
     private log: Logging,
-    enableFan = false,
+    enableFan = true,
     enableExterior = false
   ) {
     const { Characteristic, Service } = hap;
@@ -71,9 +71,7 @@ export class DeviceAccessory {
     }
 
     if (enableFan) {
-      this.fan =
-        accessory.getService(Service.Fanv2) ||
-        accessory.addService(Service.Fanv2);
+      this.fan = this.getService(Service.Fanv2, `${device.name} Fan`);
 
       this.fan
         .getCharacteristic(Characteristic.Active)
@@ -90,7 +88,7 @@ export class DeviceAccessory {
 
       this.fan
         .getCharacteristic(Characteristic.RotationSpeed)
-        .setProps({ minValue: 20, maxValue: 100, minStep: 20 })
+        .setProps({ validValues: [20, 40, 50, 60, 80, 100] })
         .onGet(this.getRotationSpeed.bind(this))
         .onSet(this.setRotationSpeed.bind(this));
 
