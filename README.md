@@ -43,6 +43,16 @@ This plugin can be configured manually using your email and password used to log
 }
 ```
 
+## Release Notes
+
+### v0.1.0
+
+- Initial Release
+
+### v0.1.1
+
+- [#6](https://github.com/plecong/homebridge-dkncloudna/issues/6) Fix for issue loading on [HOOBS](https://hoobs.com) due to import of `homebridge`
+
 ## Credits
 
 - [homebridge-airzone-cloud](https://github.com/fjhorrillo/homebridge-airzone-cloud) Copyright &copy; 2021 Francisco Javier Horrillo Sancho. All rights reserved.
