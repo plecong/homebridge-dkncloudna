@@ -1,4 +1,3 @@
-import { APIEvent } from "homebridge";
 import type {
   API,
   DynamicPlatformPlugin,
@@ -12,6 +11,20 @@ import type { DCNAConfig } from "./config";
 import { hap } from "./hap";
 import { PLATFORM_NAME, PLUGIN_NAME } from "./settings";
 import type { DeviceTwin } from "./device";
+
+export declare const enum APIEvent {
+  /**
+   * Event is fired once homebridge has finished with booting up and initializing all components and plugins.
+   * When this event is fired it is possible that the Bridge accessory isn't published yet, if homebridge still needs
+   * to wait for some {@see StaticPlatformPlugin | StaticPlatformPlugins} to finish accessory creation.
+   */
+  DID_FINISH_LAUNCHING = "didFinishLaunching",
+  /**
+   * This event is fired when homebridge got shutdown. This could be a regular shutdown or a unexpected crash.
+   * At this stage all Accessories are already unpublished and all PlatformAccessories are already saved to disk!
+   */
+  SHUTDOWN = "shutdown",
+}
 
 export class DknCloudNaPlatform implements DynamicPlatformPlugin {
   private readonly config: PlatformConfig & DCNAConfig;
