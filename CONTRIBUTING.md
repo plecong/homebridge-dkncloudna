@@ -12,33 +12,21 @@ to create a new `config.json` within your Homebridge configuration folder (typic
 
 From within the `homebridge-dkncloudna` repository local workspace:
 
-1. Build the plugin
-
-   `npm run build`
-
-2. Link to Homebridge
-
-   `npm link`
-
+1. Build the plugin: `npm run build`
+2. Link to Homebridge: `npm link`
 3. Update your `config.json` to include configuration for this plugin. Add the following block under `platforms`:
 
-   ```
-       {
-       "platform": "dkncloudna",
-       "email": "<your login email>",
-       "password": "<your login password>"
-       }
+   ```json
+   {
+     "platform": "dkncloudna",
+     "email": "<your login email>",
+     "password": "<your login password>"
+   }
    ```
 
-4. Start Homebridge in Debug mode:
-
-   `homebrige -D`
+4. Start Homebridge in Debug mode: `homebrige -D`
 
 ## References
 
 - [Homebridge Plugin Development](https://developers.homebridge.io/#/)
 - [Homebridge Plugin Template Repository](https://github.com/homebridge/homebridge-plugin-template)
-
-```
-
-```

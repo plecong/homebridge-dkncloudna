@@ -35,7 +35,7 @@ _Note: The configuration file is NOT secure, however saving your login informati
 
 This plugin can be configured manually using your email and password used to login to DKN Cloud NA. To manually configure, add the following to the Homebridge `config.json` under `platforms`:
 
-```
+```json
 {
     "platform": "dkncloudna",
     "email": "<your email address>"
