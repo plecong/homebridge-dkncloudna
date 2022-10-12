@@ -43,6 +43,24 @@ This plugin can be configured manually using your email and password used to log
 }
 ```
 
+### Configuration Options
+
+| Option           | Description                                                                                                          | Type      | Required |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------- | --------- | -------- |
+| `platform`       | Must be `dkncloudna` for Homebridge to recognize the configuration                                                   | N/A       | `true`   |
+| `email`          | Email address to login to DKN Cloud NA app                                                                           | `string`  | `false`  |
+| `password`       | Password to login to DKN Cloud NA app                                                                                | `string`  | `false`  |
+| `token`          | Token used to access DKN Cloud NA API. This will be set by the configuration UI by providing your `email`/`password` | `string`  | `false`  |
+| `refreshToken`   | Token used to refresh the Access Token when expired. This does not need to be manually set.                          | `string`  | `false`  |
+| `enableExterior` | Enable the Exterior Temperature Sensor (restart required)                                                            | `boolean` | `false`  |
+| `enableFan`      | Enable the EXPERIMENTAL Fan V2 control (restart required)                                                            | `boolean` | `false`  |
+
+## Features
+
+### Fan Control (_EXPERIMENTAL_)
+
+By enabling the fan control in the configuration, a separate [Fan V2 service](https://developers.homebridge.io/#/service/Fanv2) is associated with the accessory. This allows for controlling the fan state (Auto/Manual), rotation speed (20%, 40%, 60%, 80%, 100%), and swing mode. The HomeKit Fan service does not map cleanly to the DKN Cloud NA app and the DKN Cloud NA app doesn't provide raw rotation speed, so the current implementation of the fan control is **EXPERIMENTAL**.
+
 ## Release Notes
 
 ### v0.1.0
