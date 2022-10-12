@@ -40,7 +40,7 @@
       },
       "enableFan": {
         "title": "Enable Fan Control (Experimental)",
-        "description": "Enable the Fan V2 control (restart required)",
+        "description": "Enable the Fan V2 service to control fan mode, rotation speed, and swing mode (restart required)",
         "type": "boolean",
         "required": false
       }

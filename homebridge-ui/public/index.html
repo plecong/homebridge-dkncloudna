@@ -28,6 +28,10 @@
       }
       await homebridge.updatePluginConfig([updated]);
     },
+    async updateOptions() {
+      const updated = Object.assign({}, this.config);
+      await homebridge.updatePluginConfig([updated]);
+    },
     async submit() {
       try {
         const response = await homebridge.request("/login", {
@@ -48,7 +52,6 @@
         this.passwordType === "password" ? "text" : "password";
     },
     selectTab(e) {
-      console.log("selectTab", e.target.getAttribute("aria-controls"));
       this.tab = e.target.getAttribute("aria-controls");
     },
     get open() {
@@ -79,32 +82,33 @@
     <li class="nav-item" role="presentation">
       <button
         class="nav-link"
-        :class="tab == 'profile' && 'active'"
-        id="profile-tab"
+        :class="tab == 'options' && 'active'"
+        id="options-tab"
         type="button"
         role="tab"
-        aria-controls="profile"
+        aria-controls="options"
         aria-selected="false"
         @click.prevent="selectTab"
       >
-        Profile
+        Options
       </button>
     </li>
   </ul>
   <div class="tab-content">
     <div
-      class="tab-pane"
+      class="tab-pane my-3"
       :class="tab === 'auth' && 'active'"
       id="auth"
       role="tabpanel"
       aria-labelledby="auth-tab"
     >
+      <h4>Authentication</h4>
       <p class="mt-3">
         Enter your login information for the DKN Cloud NA app and select
         "Authenticate" to retrieve tokens
       </p>
 
-      <form class="mb-3" @submit.prevent="submit">
+      <form @submit.prevent="submit">
         <div class="form-group">
           <label for="email">Email Address</label>
           <input x-model="email" id="email" type="email" class="form-control" />
@@ -143,7 +147,7 @@
               <label class="form-check-label" for="remember"
                 >Remember Login</label
               >
-              <small id="emailHelp" class="form-text text-muted">
+              <small class="form-text text-muted">
                 Save login in the Homebridge <code>config.json</code>
                 <em>
                   The Homebridge configuration file is NOT secure, however
@@ -201,13 +205,51 @@
       </form>
     </div>
     <div
-      class="tab-pane"
-      :class="tab === 'profile' && 'active'"
-      id="profile"
+      class="tab-pane my-3"
+      :class="tab === 'options' && 'active'"
+      id="options"
       role="tabpanel"
-      aria-labelledby="profile-tab"
+      aria-labelledby="options-tab"
     >
-      ...
+      <h4>Options</h4>
+      <form @submit.prevent="submit">
+        <div class="form-group">
+          <div class="form-check">
+            <input
+              x-model="config.enableExterior"
+              @change="updateOptions"
+              id="exterior"
+              type="checkbox"
+              class="form-check-input"
+            />
+            <label class="form-check-label" for="exterior"
+              >Exterior Temperature Sensor</label
+            >
+            <small class="form-text text-muted">
+              Enable the Exterior Temperature Sensor <em>(restart required)</em>
+            </small>
+          </div>
+        </div>
+        <div class="form-group">
+          <div class="form-check">
+            <input
+              x-model="config.enableFan"
+              @change="updateOptions"
+              id="fan"
+              type="checkbox"
+              class="form-check-input"
+            />
+            <label class="form-check-label" for="fan"
+              >Fan Control
+              <span class="badge badge-secondary">EXPERIMENTAL</span></label
+            >
+            <small class="form-text text-muted">
+              Enable the Fan V2 service to control fan mode, rotation speed, and
+              swing mode <em>(restart required)</em>
+            </small>
+          </div>
+        </div>
+      </form>
     </div>
   </div>
 </div>
