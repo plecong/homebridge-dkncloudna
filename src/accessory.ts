@@ -27,7 +27,7 @@ export class DeviceAccessory {
     private device: DeviceTwin,
     private accessory: PlatformAccessory,
     private log: Logging,
-    enableFan = true,
+    enableFan = false,
     enableExterior = false
   ) {
     const { Characteristic, Service } = hap;
@@ -151,6 +151,13 @@ export class DeviceAccessory {
     });
   }
 
+  /**
+   * Updates the DeviceTwin that is updated by the API for events. The DeviceTwin
+   * is the connection from this accessory to the API for commands and to listen
+   * for events that update HomeKit characteristics.
+   *
+   * @param device DeviceTwin from API
+   */
   updateDevice(device: DeviceTwin): void {
     if (this.device) {
       this.device.removeAllListeners();
@@ -159,6 +166,13 @@ export class DeviceAccessory {
     this.device.addListener("patch", this.updateCharacteristics.bind(this));
   }
 
+  /**
+   * Handler for the "patch" event that is emitted by the DeviceTwin when there
+   * are device updates. This accessory listens to these events to update the
+   * HomeKit characteristic state.
+   *
+   * @param property name of device property being updated
+   */
   updateCharacteristics(property: string) {
     const { Characteristic } = hap;
     switch (property) {
