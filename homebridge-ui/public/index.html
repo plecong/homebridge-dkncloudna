@@ -105,7 +105,7 @@
       <h4>Authentication</h4>
       <p class="mt-3">
         Enter your login information for the DKN Cloud NA app and select
-        "Authenticate" to retrieve tokens
+        "Authenticate" to retrieve tokens needed to connect
       </p>
 
       <form @submit.prevent="submit">
@@ -148,7 +148,8 @@
                 >Remember Login</label
               >
               <small class="form-text text-muted">
-                Save login in the Homebridge <code>config.json</code>
+                Save login information in the Homebridge
+                <code>config.json</code>
                 <em>
                   The Homebridge configuration file is NOT secure, however
                   saving your login information will ensure the plugin can
