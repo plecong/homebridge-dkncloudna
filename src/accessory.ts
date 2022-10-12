@@ -61,6 +61,10 @@ export class DeviceAccessory {
       .onGet(this.getTemperatureDisplayUnits.bind(this));
 
     if (enableExterior) {
+      this.log.info(
+        `Enabling Exterior Temperature Sensor on ${this.device.name}`
+      );
+
       this.exteriorSensor = this.getService(
         Service.TemperatureSensor,
         `${device.name} Exterior`
@@ -71,6 +75,8 @@ export class DeviceAccessory {
     }
 
     if (enableFan) {
+      this.log.info(`Enabling Fan Control on ${this.device.name}`);
+
       this.fan = this.getService(Service.Fanv2, `${device.name} Fan`);
 
       this.fan

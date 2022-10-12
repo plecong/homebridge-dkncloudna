@@ -9,17 +9,20 @@
     "properties": {
       "email": {
         "title": "Email Address",
+        "description": "Email address to login to DKN Cloud NA app",
         "type": "string",
-        "required": false
+        "required": false,
+        "format": "email"
       },
       "password": {
         "title": "Password",
+        "description": "Password to login to DKN Cloud NA app",
         "type": "string",
         "required": false
       },
       "token": {
         "title": "Access Token",
-        "description": "Token used to access DKN Cloud NA",
+        "description": "Token used to access DKN Cloud NA API",
         "type": "string",
         "required": false
       },
@@ -27,6 +30,18 @@
         "title": "Refresh Token",
         "description": "Token used to refresh the Access Token when expired",
         "type": "string",
+        "required": false
+      },
+      "enableExterior": {
+        "title": "Enable Exterior Temperature Sensor",
+        "description": "Enable the Exterior Temperature Sensor (restart required)",
+        "type": "boolean",
+        "required": false
+      },
+      "enableFan": {
+        "title": "Enable Fan Control (Experimental)",
+        "description": "Enable the Fan V2 control (restart required)",
+        "type": "boolean",
         "required": false
       }
     }

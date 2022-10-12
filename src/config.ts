@@ -3,4 +3,6 @@ export type DCNAConfig = {
   password?: string;
   token?: string;
   refreshToken?: string;
+  enableExterior?: boolean;
+  enableFan?: boolean;
 };

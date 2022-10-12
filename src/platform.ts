@@ -97,7 +97,13 @@ export class DknCloudNaPlatform implements DynamicPlatformPlugin {
       if (existingDevice) {
         existingDevice.updateDevice(device);
       } else {
-        this.devices[uuid] = new DeviceAccessory(device, accessory, this.log);
+        this.devices[uuid] = new DeviceAccessory(
+          device,
+          accessory,
+          this.log,
+          !!this.config.enableFan,
+          !!this.config.enableExterior
+        );
       }
       activeAccessoryIds.push(uuid);
     }
