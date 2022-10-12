@@ -130,6 +130,7 @@ export class Api extends EventEmitter {
       // remove all devices
       this.installations = [];
       this.devices.clear();
+      this.disconnect();
     }
 
     this.emit("devices", this.devices.values());
@@ -180,26 +181,28 @@ export class Api extends EventEmitter {
   }
 
   private onDeletedInstallation(control: InstallationControl) {
+    const { installation_id } = control;
+
     // remove from installation
     const remove = this.installations.findIndex(
-      (x) => x._id === control.installation_id
+      (x) => x._id === installation_id
     );
     if (remove > -1) {
       this.installations.splice(remove, 1);
     }
 
-    // remove devices
+    // remove devices for this installation
     for (const [key, value] of this.devices) {
-      if (value.installation === control.installation_id) {
+      if (value.installation === installation_id) {
         this.devices.delete(key);
       }
     }
 
-    // close sockets
-    const socket = this.sockets[control.installation_id];
+    // close sockets related to this installation
+    const socket = this.sockets[installation_id];
     if (socket) {
       socket.close();
-      delete this.sockets[control.installation_id];
+      delete this.sockets[installation_id];
     }
 
     this.emit("devices", this.devices.values());
