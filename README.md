@@ -71,6 +71,11 @@ By enabling the fan control in the configuration, a separate [Fan V2 service](ht
 
 - [#6](https://github.com/plecong/homebridge-dkncloudna/issues/6) Fix for issue loading on [HOOBS](https://hoobs.com) due to import of `homebridge`
 
+### v0.2.0
+
+- [#5](https://github.com/plecong/homebridge-dkncloudna/issues/5) Feature request to expose the exterior temperature sensor
+- Added experimental fan control
+
 ## Credits
 
 - [homebridge-airzone-cloud](https://github.com/fjhorrillo/homebridge-airzone-cloud) Copyright &copy; 2021 Francisco Javier Horrillo Sancho. All rights reserved.
