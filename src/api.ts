@@ -77,7 +77,7 @@ export class Api extends EventEmitter {
     if (!this.authenticated && this.refreshToken) {
       const result = await this.client.refreshToken(this.refreshToken);
       if (result.ok) {
-        this.saveTokens(result.value);
+        await this.saveTokens(result.value);
         const loginResult = await this.client.isLoggedIn();
         this.authenticated = loginResult.ok;
       }
@@ -90,7 +90,7 @@ export class Api extends EventEmitter {
         this.config.password
       );
       if (result.ok) {
-        this.saveTokens(result.value);
+        await this.saveTokens(result.value);
         this.authenticated = true;
       }
     }
