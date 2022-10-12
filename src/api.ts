@@ -5,7 +5,12 @@ import { readFile, writeFile } from "fs";
 import { Manager, Socket } from "socket.io-client";
 
 import type { DCNAConfig } from "./config";
-import type { ApiConfig, DeviceDataMessage, InstallationInfo } from "./types";
+import type {
+  ApiConfig,
+  DeviceDataMessage,
+  DknToken,
+  InstallationInfo,
+} from "./types";
 import { ApiClient } from "./client";
 import { DeviceTwin } from "./device";
 import { NetworkLogger } from "./logger";
@@ -291,10 +296,7 @@ export class Api extends EventEmitter {
     socket.emit("create-machine-event", machineEvent);
   }
 
-  private async saveTokens(tokens: {
-    token: string;
-    refreshToken: string;
-  }): Promise<void> {
+  private async saveTokens(tokens: DknToken): Promise<void> {
     this.token = tokens.token;
     this.refreshToken = tokens.refreshToken;
     this.client.token = this.token;
