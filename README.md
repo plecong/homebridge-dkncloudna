@@ -1,3 +1,5 @@
+*Archive Note*: I no longer have access to Daikin heat pumps and so will be archiving this repository. The plugin can continue to be used, but any changes to the DKN Cloud NA API may break functionality which will not be addressed.
+
 # Homebridge DKN Cloud NA
 
 This [Homebridge](https://github.com/homebridge/homebridge) plugin provides a platform for connecting devices using [DKN Cloud NA](https://dkncloudna.com) to Apple's [HomeKit](http://www.apple.com/ios/home/).
